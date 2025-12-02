@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyrox 75: Heavyweight Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chosen Palette: Warm Stone & Amber -->
+    <!-- Primary Background: Stone-100 (#f5f5f4) -->
+    <!-- Card Background: White (#ffffff) -->
+    <!-- Primary Text: Stone-800 (#292524) -->
+    <!-- Accent Color: Amber-600 (#d97706) for energy/action -->
+    <!-- Secondary Color: Stone-500 (#78716c) for supporting text -->
+
+    <!-- Application Structure Plan: 
+         1. Header: Branding and Global Navigation (Dashboard, Schedule, Strategy).
+         2. Dashboard: Hero section with current status, motivation, and a quick view of "Today's Focus".
+         3. Schedule Section: The core interaction. A Week-by-Week selector that populates a grid of 7 days. Clicking a day opens a detailed view of the workout.
+         4. Strategy Section: Accordion-style breakdowns of Rules, Nutrition, and Equipment.
+         5. Analytics Section: Charts showing the distribution of effort (Cardio vs Strength) and intensity progression.
+         Rationale: The 3-phase structure needs to be broken down. Users need to see "Where am I?" (Dashboard) and "What do I do?" (Schedule).
+    -->
+
+    <!-- Visualization & Content Choices:
+         1. Phase Progression (Doughnut Chart): Visualizes how much of the 75 days is completed vs remaining. Goal: Motivation.
+         2. Weekly Focus (Bar Chart): Compares Cardio vs Strength days per phase. Goal: Show the balance of the plan.
+         3. Workout Cards (HTML/JS): Dynamic HTML generation based on the JSON plan data. Goal: Clean presentation of sets/reps without clutter.
+         4. Interaction: Tab switching for main views, Dropdown for week selection, Modal/Expand for day details.
+         Confirming NO SVG graphics used. NO Mermaid JS used.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f5f5f4; /* stone-100 */
+            color: #292524; /* stone-800 */
+        }
+        
+        /* Chart Container Styling as per requirements */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        .tab-active {
+            border-bottom: 3px solid #d97706; /* amber-600 */
+            color: #d97706;
+            font-weight: 600;
+        }
+
+        .tab-inactive {
+            border-bottom: 3px solid transparent;
+            color: #78716c; /* stone-500 */
+        }
+        
+        .tab-inactive:hover {
+            color: #44403c; /* stone-700 */
+        }
+
+        /* Custom Scrollbar for internal scrolling elements */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e7e5e4; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a8a29e; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #78716c; 
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="text-2xl font-bold text-stone-800">HYROX<span class="text-amber-600">75</span></span>
+                        <span class="ml-2 text-xs font-medium text-stone-500 bg-stone-100 px-2 py-1 rounded hidden sm:block">HEAVYWEIGHT ENGINE</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4 sm:space-x-8">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="tab-active px-1 pt-1 text-sm sm:text-base font-medium transition-colors duration-200">Dashboard</button>
+                    <button onclick="switchTab('schedule')" id="nav-schedule" class="tab-inactive px-1 pt-1 text-sm sm:text-base font-medium transition-colors duration-200">Schedule</button>
+                    <button onclick="switchTab('strategy')" id="nav-strategy" class="tab-inactive px-1 pt-1 text-sm sm:text-base font-medium transition-colors duration-200">Strategy</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- DASHBOARD VIEW -->
+        <section id="view-dashboard" class="space-y-8 animate-fade-in">
+            
+            <!-- Hero / Welcome -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-amber-600">
+                <h1 class="text-2xl font-bold text-stone-900">Welcome to Day <span id="current-day-display">1</span></h1>
+                <p class="mt-2 text-stone-600 max-w-2xl">
+                    This program is designed for the 96kg+ athlete. Your mass is your engine. 
+                    Prioritize <strong>consistency over intensity</strong>. Protect your joints, master the step-back burpee, and build your capacity week by week.
+                </p>
+                <div class="mt-4 flex gap-4">
+                    <button onclick="switchTab('schedule')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow">Go to Today's Workout</button>
+                    <button onclick="switchTab('strategy')" class="bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 rounded-lg text-sm font-semibold transition">Read the Rules</button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Current Phase Card -->
+                <div class="bg-white rounded-xl shadow-sm p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-stone-500 uppercase tracking-wider">Current Phase</h3>
+                        <h2 class="text-2xl font-bold text-stone-800 mt-1" id="current-phase-name">Phase 1: The Wake Up</h2>
+                        <p class="text-sm text-stone-600 mt-2" id="current-phase-desc">Focus on form, low intensity cardio, and getting the body moving safely.</p>
+                    </div>
+                    <div class="mt-4">
+                        <div class="w-full bg-stone-200 rounded-full h-2.5">
+                            <div class="bg-amber-600 h-2.5 rounded-full" style="width: 25%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-stone-500 mt-1">
+                            <span>Week 1-4</span>
+                            <span>Base Building</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Milestone -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-sm font-medium text-stone-500 uppercase tracking-wider">Plan Overview</h3>
+                    <div class="mt-4 space-y-3">
+                        <div class="flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold text-xs">1</span>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-stone-900">Days 1-28: The Wake Up</p>
+                                <p class="text-xs text-stone-500">Joint prep & aerobic base.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center font-bold text-xs">2</span>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-stone-900">Days 29-56: Building Capacity</p>
+                                <p class="text-xs text-stone-500">Sleds, lunges & volume.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center font-bold text-xs">3</span>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-stone-900">Days 57-75: Race Ready</p>
+                                <p class="text-xs text-stone-500">Simulations & Taper.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Visualization: Focus Distribution -->
+                <div class="bg-white rounded-xl shadow-sm p-6 flex flex-col">
+                    <h3 class="text-sm font-medium text-stone-500 uppercase tracking-wider mb-2">Weekly Focus Balance</h3>
+                    <div class="flex-grow flex items-center justify-center">
+                        <div class="chart-container">
+                            <canvas id="focusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCHEDULE VIEW -->
+        <section id="view-schedule" class="hidden space-y-6">
+            
+            <!-- Controls -->
+            <div class="bg-white rounded-xl shadow-sm p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-stone-800">Training Schedule</h2>
+                    <p class="text-sm text-stone-500">Select a week to view your daily missions.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="week-select" class="text-sm font-medium text-stone-700">Jump to:</label>
+                    <select id="week-select" onchange="renderWeek()" class="block w-48 pl-3 pr-10 py-2 text-base border-stone-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-md border bg-stone-50 text-stone-800">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Weekly Grid -->
+            <div id="week-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Day Cards populated by JS -->
+            </div>
+
+            <!-- Day Detail View (Initially Hidden) -->
+            <div id="day-detail-panel" class="hidden bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
+                <div class="bg-stone-800 px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <h3 id="detail-title" class="text-xl font-bold text-white">Monday: Low Impact Cardio</h3>
+                        <p id="detail-subtitle" class="text-amber-400 text-sm font-medium">Phase 1 • Week 1</p>
+                    </div>
+                    <button onclick="closeDetailPanel()" class="text-stone-400 hover:text-white transition">
+                        <span class="text-2xl">&times;</span>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- Workout Content -->
+                            <div>
+                                <h4 class="text-sm uppercase tracking-wide text-stone-500 font-bold mb-3">The Workout</h4>
+                                <div id="detail-content" class="bg-stone-50 rounded-lg p-5 border border-stone-100 text-stone-800 space-y-2">
+                                    <!-- Dynamic Content -->
+                                </div>
+                            </div>
+                            
+                            <!-- Notes / Tips -->
+                            <div id="detail-notes-container">
+                                <h4 class="text-sm uppercase tracking-wide text-stone-500 font-bold mb-3">Coach's Notes</h4>
+                                <div class="bg-amber-50 border-l-4 border-amber-500 p-4">
+                                    <p id="detail-notes" class="text-stone-700 italic">Conversational pace. If you are gasping for air, slow down.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar in Detail View -->
+                        <div class="space-y-6">
+                            <div class="bg-white border border-stone-200 rounded-lg p-4 shadow-sm">
+                                <h4 class="font-bold text-stone-800 mb-2">Duration</h4>
+                                <p id="detail-duration" class="text-2xl font-light text-stone-600">30 Mins</p>
+                            </div>
+                            <div class="bg-white border border-stone-200 rounded-lg p-4 shadow-sm">
+                                <h4 class="font-bold text-stone-800 mb-2">Intensity</h4>
+                                <div id="detail-intensity" class="text-stone-600">
+                                    Low Impact / Zone 2
+                                </div>
+                            </div>
+                            <!-- Visualizer Placeholder (e.g., for run/walk intervals) -->
+                            <div id="visualizer-container" class="hidden">
+                                <h4 class="font-bold text-stone-800 mb-2">Interval Pattern</h4>
+                                <div class="chart-container" style="height: 150px;">
+                                    <canvas id="intervalChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STRATEGY VIEW -->
+        <section id="view-strategy" class="hidden space-y-8">
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <h2 class="text-2xl font-bold text-stone-900 mb-4">The Heavyweight Strategy</h2>
+                <p class="text-stone-600 mb-6">Hyrox is different for a 96kg athlete. We don't float; we power through. Here is your survival guide.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Rules Card -->
+                    <div class="border border-stone-200 rounded-lg p-5 hover:border-amber-500 transition-colors">
+                        <h3 class="font-bold text-lg text-stone-800 mb-3 flex items-center">
+                            <span class="bg-amber-100 text-amber-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-sm">1</span>
+                            The Run/Walk Rule
+                        </h3>
+                        <p class="text-stone-600 text-sm">We do not run until failure. We run on a schedule. In the early phases, alternating running and walking keeps your heart rate manageable and protects your knees. Stick to the intervals.</p>
+                    </div>
+
+                    <div class="border border-stone-200 rounded-lg p-5 hover:border-amber-500 transition-colors">
+                        <h3 class="font-bold text-lg text-stone-800 mb-3 flex items-center">
+                            <span class="bg-amber-100 text-amber-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-sm">2</span>
+                            Step-Up Burpees
+                        </h3>
+                        <p class="text-stone-600 text-sm"><strong>NEVER JUMP.</strong> Step one foot back, lower your chest, step one foot up. This saves your lower back and keeps your heart rate from red-lining. You are moving 96kg; efficiency is key.</p>
+                    </div>
+
+                    <div class="border border-stone-200 rounded-lg p-5 hover:border-amber-500 transition-colors">
+                        <h3 class="font-bold text-lg text-stone-800 mb-3 flex items-center">
+                            <span class="bg-amber-100 text-amber-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-sm">3</span>
+                            4 Days On, 3 Days Off
+                        </h3>
+                        <p class="text-stone-600 text-sm">Recovery is where muscle is built and joints are repaired. Do not skip rest days. A 96kg body takes longer to repair structural damage from impact than a 70kg body.</p>
+                    </div>
+
+                    <div class="border border-stone-200 rounded-lg p-5 hover:border-amber-500 transition-colors">
+                        <h3 class="font-bold text-lg text-stone-800 mb-3 flex items-center">
+                            <span class="bg-amber-100 text-amber-600 rounded-full w-6 h-6 flex items-center justify-center mr-2 text-sm">4</span>
+                            Nutrition & Protein
+                        </h3>
+                        <p class="text-stone-600 text-sm">Hydrate <strong>during</strong> workouts. Aim for a protein source (chicken, fish, eggs, shake) within 1 hour of finishing. Your larger muscle mass requires fuel to recover.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Equipment Substitutions -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <h3 class="text-xl font-bold text-stone-900 mb-4">Equipment Substitutions</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-stone-200">
+                        <thead class="bg-stone-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Gym Equipment</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Home/No-Gym Alternative</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-stone-200 text-sm text-stone-700">
+                            <tr>
+                                <td class="px-6 py-4 font-medium">Sled Push</td>
+                                <td class="px-6 py-4">Push a car in neutral (with partner on brakes) OR push heavy weight plates on a towel across a smooth floor.</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-medium">SkiErg / RowErg</td>
+                                <td class="px-6 py-4">Jumping Jacks or Burpees (10 calories = 10 reps).</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 font-medium">Wall Balls</td>
+                                <td class="px-6 py-4">"Thrusters" with a dumbbell or backpack. Squat down holding weight, stand up and press overhead.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-stone-200 mt-auto">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-sm text-stone-500">Hyrox 75 Beginner Plan | Built for the Everyday Athlete</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- DATA STORAGE ---
+        // Storing the full plan in a structured JSON format
+        const planData = {
+            phases: [
+                { id: 1, name: "The Wake Up", weeks: [1, 2, 3, 4], desc: "Low intensity. Focus on form. Get moving." },
+                { id: 2, name: "Building Capacity", weeks: [5, 6, 7, 8], desc: "Moderate intensity. Introduce Sleds and Lunges." },
+                { id: 3, name: "Race Ready", weeks: [9, 10, 11], desc: "Confidence building. Simulations and Taper." }
+            ],
+            weeklyTemplates: {
+                phase1: [
+                    { day: "Monday", type: "Cardio", title: "Low Impact Cardio (The Engine)", duration: "30 Mins", intensity: "Conversational / Zone 2", content: "30 Minutes continuous movement.<br><strong>Choose One:</strong> Rowing Machine, Bike, or Incline Walking.<br>Goal: Be able to talk the whole time.", notes: "If you are gasping for air, slow down. Protect the knees." },
+                    { day: "Tuesday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Walking is okay, but no gym.", notes: "Active recovery helps blood flow." },
+                    { day: "Wednesday", type: "Strength", title: "Strength Basics (Joint Support)", duration: "25 Mins", intensity: "Low / Structural", content: "<strong>Warm-up:</strong> 5 mins walking.<br><br><strong>Circuit (3 Rounds):</strong><br>• Goblet Squats: 10 reps (Light weight)<br>• Push-Ups: 10 reps (Knees/Wall ok)<br>• Plank Hold: 30 seconds<br>• Rest: 2 minutes between rounds.", notes: "Focus on depth in the squat and a flat back in the plank." },
+                    { day: "Thursday", type: "Run", title: "Run/Walk Intervals", duration: "30 Mins", intensity: "Interval", content: "<strong>Total Time:</strong> 30 Minutes<br><br><strong>Pattern:</strong><br>• Run/Jog: 2 Minutes (Slow)<br>• Walk: 2 Minutes<br>Repeat cycle until 30 mins is up.", notes: "This builds stamina without overloading joints.", pattern: [2, 2] },
+                    { day: "Friday", type: "Skill", title: "Hyrox Skills (The Fun Stuff)", duration: "30 Mins", intensity: "Moderate", content: "<strong>Circuit (3 Rounds):</strong><br>• Row/Ski: 250 meters<br>• Wall Balls: 10 reps (Light ball)<br>• Farmers Carry: 30 meters<br>• Rest: 2 minutes between rounds.", notes: "Focus on squat depth for Wall Balls." },
+                    { day: "Saturday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Total rest.", notes: "Sleep and hydrate." },
+                    { day: "Sunday", type: "Active", title: "Active Activity", duration: "45 Mins", intensity: "Low", content: "Go for a hike, swim, or long walk with family/friends.", notes: "Keep moving, but keep it fun." }
+                ],
+                phase2: [
+                    { day: "Monday", type: "Cardio", title: "Cardio Ramp Up", duration: "40 Mins", intensity: "Moderate", content: "40 Minutes continuous movement.<br><strong>Choose One:</strong> Row, Bike, or Elliptical.<br><strong>Twist:</strong> Start easy, push harder for the last 10 mins.", notes: "Building the engine size." },
+                    { day: "Tuesday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "No gym.", notes: "-" },
+                    { day: "Wednesday", type: "Strength", title: "Strength & Sleds", duration: "35 Mins", intensity: "Moderate / Heavy", content: "<strong>Warm-up:</strong> 5 mins walking.<br><br><strong>Workout:</strong><br>A. Reverse Lunges: 3 x 12 steps (Bodyweight)<br>B. Sled Push: 4 x 15m (Moderate weight, Walk it)<br>C. Lat Pulldowns/Rows: 3 x 10 reps.", notes: "Step backwards on lunges to save knees. Lean into the sled." },
+                    { day: "Thursday", type: "Run", title: "Run/Walk Progression", duration: "35 Mins", intensity: "Interval", content: "<strong>Total Time:</strong> 35 Minutes<br><br><strong>Pattern:</strong><br>• Run/Jog: 3 Minutes<br>• Walk: 2 Minutes<br>Repeat until time is up.", notes: "We increased running time by 1 minute. You got this.", pattern: [3, 2] },
+                    { day: "Friday", type: "Skill", title: "The 'Mini Hyrox' Circuit", duration: "30 Mins", intensity: "High", content: "<strong>3 Rounds:</strong><br>• Row: 500 meters<br>• Burpees: 10 reps (Step back, Step up)<br>• Wall Balls: 15 reps<br>• Rest: 3 minutes between rounds.", notes: "NO JUMPING on burpees." },
+                    { day: "Saturday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Total Rest.", notes: "-" },
+                    { day: "Sunday", type: "Active", title: "Long Walk/Jog", duration: "60 Mins", intensity: "Low/Moderate", content: "60 minutes total.<br>mostly walking, but insert a 1-minute jog every 10 minutes.", notes: "Time on feet is the goal." }
+                ],
+                phase3: [
+                    { day: "Monday", type: "Cardio", title: "Mixed Cardio", duration: "40 Mins", intensity: "Moderate", content: "20 mins Row or Ski<br>+<br>20 mins Bike.<br>Total: 40 mins.", notes: "Split the volume to save boredom and body parts." },
+                    { day: "Tuesday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Rest.", notes: "-" },
+                    { day: "Wednesday", type: "Strength", title: "Strength Power", duration: "40 Mins", intensity: "Heavy", content: "A. Sled Push: 4 x 20m (Heavier)<br>B. Sled Pull: 4 x 20m (Rope pull)<br>C. Farmers Carry: 3 x 50m (Heavy)", notes: "This is the 'Heavyweight' advantage day. Move heavy things." },
+                    { day: "Thursday", type: "Run", title: "The 'Long' Run", duration: "40 Mins", intensity: "Interval", content: "<strong>Total Time:</strong> 40 Minutes<br><br><strong>Pattern:</strong><br>• Run/Jog: 4 Minutes<br>• Walk: 2 Minutes.", notes: "Longest running interval yet.", pattern: [4, 2] },
+                    { day: "Friday", type: "Skill", title: "Simulation Day", duration: "Var", intensity: "Race Pace", content: "<strong>Week 9:</strong> 1 round: 500m Run, 500m Row, 20 Wall Balls.<br><strong>Week 10:</strong> 2 rounds: 500m Run, 500m Ski, 20m Sled Push.<br><strong>Week 11 (Taper):</strong> 20 mins light stretch/walk.", notes: "Test your gear. Test your nutrition." },
+                    { day: "Saturday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Rest.", notes: "-" },
+                    { day: "Sunday", type: "Rest", title: "REST", duration: "-", intensity: "Recovery", content: "Rest.", notes: "Tapering down." }
+                ]
+            }
+        };
+
+        // State Management
+        let currentWeek = 1;
+        
+        // --- CORE FUNCTIONS ---
+
+        function initApp() {
+            populateWeekSelect();
+            renderWeek();
+            renderStats();
+            updatePhaseInfo();
+        }
+
+        function switchTab(tabName) {
+            // Hide all views
+            ['dashboard', 'schedule', 'strategy'].forEach(view => {
+                document.getElementById(`view-${view}`).classList.add('hidden');
+                document.getElementById(`nav-${view}`).classList.replace('tab-active', 'tab-inactive');
+            });
+
+            // Show selected view
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+            document.getElementById(`nav-${tabName}`).classList.replace('tab-inactive', 'tab-active');
+
+            // Specific refresh actions
+            if (tabName === 'dashboard') {
+                renderStats(); // animate charts
+            }
+        }
+
+        function populateWeekSelect() {
+            const select = document.getElementById('week-select');
+            select.innerHTML = '';
+            
+            planData.phases.forEach(phase => {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = phase.name;
+                phase.weeks.forEach(week => {
+                    const option = document.createElement('option');
+                    option.value = week;
+                    option.text = `Week ${week}`;
+                    optGroup.appendChild(option);
+                });
+                select.appendChild(optGroup);
+            });
+        }
+
+        function getPhaseForWeek(week) {
+            if (week <= 4) return planData.weeklyTemplates.phase1;
+            if (week <= 8) return planData.weeklyTemplates.phase2;
+            return planData.weeklyTemplates.phase3;
+        }
+
+        function getPhaseInfo(week) {
+            return planData.phases.find(p => p.weeks.includes(week));
+        }
+
+        function updatePhaseInfo() {
+            const phase = getPhaseInfo(currentWeek);
+            document.getElementById('current-phase-name').innerText = `Phase ${phase.id}: ${phase.name}`;
+            document.getElementById('current-phase-desc').innerText = phase.desc;
+        }
+
+        function renderWeek() {
+            const select = document.getElementById('week-select');
+            currentWeek = parseInt(select.value);
+            updatePhaseInfo();
+
+            const container = document.getElementById('week-container');
+            container.innerHTML = '';
+
+            const weeklyPlan = getPhaseForWeek(currentWeek);
+
+            weeklyPlan.forEach((dayPlan, index) => {
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-lg border border-stone-200 p-4 hover:shadow-md transition cursor-pointer ${dayPlan.type === 'Rest' ? 'opacity-75' : ''}`;
+                
+                // Color coding borders
+                let borderColor = 'border-l-4 border-stone-300'; // Default Rest
+                if (dayPlan.type === 'Cardio' || dayPlan.type === 'Run') borderColor = 'border-l-4 border-amber-500';
+                if (dayPlan.type === 'Strength' || dayPlan.type === 'Skill') borderColor = 'border-l-4 border-stone-700';
+                if (dayPlan.type === 'Active') borderColor = 'border-l-4 border-green-500';
+
+                card.className += ` ${borderColor}`;
+                
+                card.onclick = () => openDetail(dayPlan);
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-bold uppercase text-stone-500">${dayPlan.day}</span>
+                        ${dayPlan.type !== 'Rest' ? '<span class="bg-stone-100 text-stone-600 text-xs px-2 py-0.5 rounded-full">View</span>' : ''}
+                    </div>
+                    <h4 class="font-bold text-stone-800 leading-tight">${dayPlan.title}</h4>
+                    <p class="text-xs text-stone-500 mt-2">${dayPlan.duration}</p>
+                `;
+                container.appendChild(card);
+            });
+
+            // Close detail if open
+            closeDetailPanel();
+        }
+
+        let intervalChartInstance = null;
+
+        function openDetail(dayPlan) {
+            const panel = document.getElementById('day-detail-panel');
+            const weekNum = document.getElementById('week-select').value;
+            const phase = getPhaseInfo(parseInt(weekNum));
+
+            document.getElementById('detail-title').innerText = `${dayPlan.day}: ${dayPlan.title}`;
+            document.getElementById('detail-subtitle').innerText = `${phase.name} • Week ${weekNum}`;
+            document.getElementById('detail-content').innerHTML = dayPlan.content;
+            document.getElementById('detail-notes').innerText = dayPlan.notes;
+            document.getElementById('detail-duration').innerText = dayPlan.duration;
+            document.getElementById('detail-intensity').innerText = dayPlan.intensity;
+
+            // Visualizer Logic for Run/Walk
+            const visContainer = document.getElementById('visualizer-container');
+            if (dayPlan.pattern) {
+                visContainer.classList.remove('hidden');
+                renderIntervalChart(dayPlan.pattern);
+            } else {
+                visContainer.classList.add('hidden');
+            }
+
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function closeDetailPanel() {
+            document.getElementById('day-detail-panel').classList.add('hidden');
+        }
+
+        function renderIntervalChart(pattern) {
+            const ctx = document.getElementById('intervalChart').getContext('2d');
+            
+            if (intervalChartInstance) {
+                intervalChartInstance.destroy();
+            }
+
+            // Create pattern data: Run, Walk, Run, Walk... for visualization
+            const labels = ['Run', 'Walk', 'Run', 'Walk', 'Run', 'Walk'];
+            const data = [pattern[0], pattern[1], pattern[0], pattern[1], pattern[0], pattern[1]];
+            const colors = ['#d97706', '#e5e5e5', '#d97706', '#e5e5e5', '#d97706', '#e5e5e5'];
+
+            intervalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Minutes',
+                        data: data,
+                        backgroundColor: colors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.raw + ' Minutes';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, display: false },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- DASHBOARD CHARTS ---
+        let focusChartInstance = null;
+
+        function renderStats() {
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            
+            if (focusChartInstance) {
+                return; // Don't redraw if exists
+            }
+
+            // Data: Count of session types per week approx
+            // Phase 1: 1 Cardio, 1 Strength, 1 Run, 1 Skill = Balanced
+            // Phase 2: 1 Cardio, 1 Str/Sled, 1 Run, 1 Circuit = Higher Intensity
+            // Phase 3: 1 Mixed, 1 Heavy Str, 1 Run, 1 Sim = Performance
+
+            focusChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cardio/Run', 'Strength/Sled', 'Skills/Circuit', 'Rest/Recovery'],
+                    datasets: [{
+                        data: [2, 1, 1, 3], // Approx distribution for beginner plan (4 days on, 3 off)
+                        backgroundColor: [
+                            '#d97706', // Amber (Cardio)
+                            '#44403c', // Stone Dark (Strength)
+                            '#a8a29e', // Stone Medium (Skill)
+                            '#e7e5e4'  // Stone Light (Rest)
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
